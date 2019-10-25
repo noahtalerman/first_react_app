@@ -3,8 +3,14 @@ import ReactDOM from 'react-dom';
 import './index.css';
 
   function Square(props) {
+    let className;
+    if (props.winningSquares && props.winningSquares.indexOf(props.index) !== -1) {
+      className = "square winner"
+    } else {
+      className = "square"
+    }
     return (
-      <button className="square" onClick={props.onClick}>
+      <button className={className} onClick={props.onClick}>
         {props.value}
       </button>
     )
@@ -14,8 +20,10 @@ import './index.css';
     renderSquare(i) {
       return (
         <Square
+            index={i}
             key={`square-${i}`}
-            value={this.props.squares[i]} 
+            value={this.props.squares[i]}
+            winningSquares={this.props.winningSquares} 
             onClick={() => this.props.onClick(i)}
         />
       );
@@ -23,12 +31,12 @@ import './index.css';
 
     createGrid() {
       let grid = [];
-      let count = 0;
+      let idx = 0;
       for (let i = 0; i < 3; ++i) {
         let row = [];
         for (let j = 0; j < 3; ++j) {
-          row.push(this.renderSquare(count))
-          count++;
+          row.push(this.renderSquare(idx))
+          idx++;
         }
         grid.push(<div key={`row-${i}`} className="board-row">{row}</div>);
       }
@@ -44,53 +52,30 @@ import './index.css';
     }
   }
 
-  class Info extends React.Component {
-    constructor(props) {
-      super(props);
-      this.state = {
-        flipped: false,
-      }
-    }
-
-    flipMoves() {
-      this.setState({
-        flipped:!this.state.flipped,
-      })
-    }
-
-    render() {
-    const history = this.props.history;
-    const current = history[this.props.stepNumber];
+  function Info(props) {
+    const history = props.history;
+    const current = history[props.stepNumber];
     const winner = calculateWinner(current.squares);
     let moves = history.map((step, move) => {
-     const desc = move ?
+      const desc = move ?
       'Go to move #' + move :
       'Go to game start';
-      const locations = {
-        0: [1, 1],
-        1: [1, 2],
-        2: [1, 3],
-        3: [2, 1],
-        4: [2, 2],
-        5: [2, 3],
-        6: [3, 1],
-        7: [3, 2],
-        8: [3, 3],
-      }
+      const locations = { 0: [1, 1], 1: [1, 2], 2: [1, 3], 3: [2, 1], 4: [2, 2], 
+                          5: [2, 3], 6: [3, 1], 7: [3, 2], 8: [3, 3], }
       const currentSquare = history[move]['stepSquare'];
       const currentLocation = locations[currentSquare];
       const location = currentLocation ? `Row ${currentLocation[0]}, Column ${currentLocation[1]}` : '';
-      if (move === this.props.stepNumber) {
+      if (move === props.stepNumber) {
         return (
           <li key={move}>
-            <button onClick={() => this.props.jumpTo(move)}><strong>{desc}</strong></button>
+            <button onClick={() => props.jumpTo(move)}><strong>{desc}</strong></button>
             <span className="location"><strong>{location}</strong></span>
           </li>
         );
       } else {
         return (
           <li key={move}>
-            <button onClick={() => this.props.jumpTo(move)}>{desc}</button>
+            <button onClick={() => props.jumpTo(move)}>{desc}</button>
             <span className="location">{location}</span>
           </li>
         );
@@ -98,20 +83,23 @@ import './index.css';
     });
 
     let status;
-    moves = this.state.flipped ? moves.reverse() : moves;
+    moves = props.infoFlipped ? moves.reverse() : moves;
+    let olAttribute = props.infoFlipped ? true : false
     if (winner) {
-      status = 'Winner: ' + winner;
+      status = 'Winner: ' + winner[0];
+
+    } else if (props.isDraw) {
+      status = 'Draw'
     } else {
-      status = 'Next player: ' + (this.props.xIsNext ? 'X' : 'O');
+      status = 'Next player: ' + (props.xIsNext ? 'X' : 'O');
     }
       return (
           <div className="game-info">
             <div>{status}</div>
-            <ol>{moves}</ol>
-            <button onClick={() => this.flipMoves()}>Toggle List</button>
+            <ol reversed={olAttribute} >{moves}</ol>
+            <button onClick={() => props.flipMoves()}>Toggle List</button>
           </div>
       );
-    }
   }
   
   class Game extends React.Component {
@@ -124,6 +112,7 @@ import './index.css';
         }],
         stepNumber: 0,
         xIsNext: true,
+        infoFlipped: false,
       }
     }
 
@@ -132,6 +121,7 @@ import './index.css';
       const current = history[history.length - 1]
       const squares = current.squares.slice();
       if (calculateWinner(squares) || squares[i]) {
+        console.log(squares[i])
         return;
       }
       squares[i] = this.state.xIsNext ? 'X': 'O';
@@ -152,13 +142,28 @@ import './index.css';
       });
     }
 
+    flipMoves() {
+      this.setState({
+        infoFlipped:!this.state.infoFlipped,
+      })
+    }
+
     renderList() {
+      const history = this.state.history;
+      const current = history[this.state.stepNumber];
+      let isDraw = false;
+      if (current.squares.every((square) => {return square !== null}) && calculateWinner(current.squares) === null) {
+        isDraw = true;
+      }
       return (
         <Info
           history={this.state.history}
           stepNumber={this.state.stepNumber}
           jumpTo={(step) => this.jumpTo(step)}
           xIsNext={this.state.xIsNext}
+          infoFlipped={this.state.infoFlipped}
+          flipMoves={() => this.flipMoves()}
+          isDraw={isDraw}
         />
       );
     }
@@ -166,11 +171,13 @@ import './index.css';
     render() {
       const history = this.state.history;
       const current = history[this.state.stepNumber];
+      const winningSquares = calculateWinner(current.squares)? calculateWinner(current.squares).slice(1) : null;
       return (
         <div className="game">
           <div className="game-board">
-            <Board 
-              squares = {current.squares}
+            <Board
+              winningSquares={winningSquares}
+              squares={current.squares}
               onClick={(i) => this.handleClick(i)}
             />
           </div>
@@ -201,7 +208,7 @@ import './index.css';
     for (let i = 0; i < lines.length; i++) {
       const [a, b, c] = lines[i];
       if (squares[a] && squares[a] === squares[b] && squares[a] === squares[c]) {
-        return squares[a];
+        return [squares[a], a, b, c];
       }
     }
     return null;
